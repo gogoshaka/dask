@@ -65,6 +65,10 @@ sources.schema.json  ← JSON schema for validation
 
 Install the Slideless Sources extension → click Save on any page.
 
+**Setup:** When prompted, enter:
+- **Client ID:** `Ov23liqQtNWKD59WA08S`
+- **Repository:** `gogoshaka/skill-sources`
+
 ### Manually
 
 1. Edit or create a topic file in `topics/`
