@@ -268,6 +268,9 @@ $('#btn-logout').addEventListener('click', async () => {
 // Save panel
 // ---------------------------------------------------------------------------
 
+// Cached page excerpt extracted via chrome.scripting.executeScript
+let pageExcerpt = null;
+
 async function showSavePanel(token, settings) {
   show(headerActions);
   hide(loginPanel);
@@ -280,6 +283,19 @@ async function showSavePanel(token, settings) {
     if (tab) {
       fieldUrl.value   = tab.url  || '';
       fieldTitle.value = tab.title || '';
+
+      // Extract page content for tag generation (activeTab + scripting)
+      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['lib/content-extractor.js'],
+          });
+          if (results && results[0] && results[0].result) {
+            pageExcerpt = results[0].result;
+          }
+        } catch { /* some pages block injection — that's fine */ }
+      }
     }
   } catch { /* activeTab might not be available yet */ }
 
@@ -430,6 +446,17 @@ btnSave.addEventListener('click', async () => {
       addedAt: new Date().toISOString(),
       addedBy: username,
     };
+
+    // Attach page excerpt for automated tag generation (removed by GitHub Action)
+    if (pageExcerpt) {
+      const excerpt = [
+        pageExcerpt.description,
+        pageExcerpt.keywords,
+        (pageExcerpt.headings || []).join('. '),
+        pageExcerpt.bodyText,
+      ].filter(Boolean).join('\n').slice(0, 2000);
+      if (excerpt) newSource._excerpt = excerpt;
+    }
 
     // Append to sources array
     if (!existing.sources) existing.sources = [];

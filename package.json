@@ -4,7 +4,9 @@
   "description": "Curated source library for [Slideless](https://github.com/gogoshaka/slideless) deck research.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test extension/test/unit/*.test.js extension/test/integration/*.test.js",
+    "test:e2e": "npx playwright test",
+    "test:all": "npm test && npm run test:e2e"
   },
   "repository": {
     "type": "git",
@@ -13,7 +15,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/gogoshaka/skill-sources/issues"
   },

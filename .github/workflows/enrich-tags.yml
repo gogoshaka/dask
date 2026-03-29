@@ -1,0 +1,34 @@
+name: Enrich source tags
+
+on:
+  push:
+    paths:
+      - 'topics/*.json'
+    branches: [main]
+
+# Prevent concurrent runs to avoid commit conflicts
+concurrency:
+  group: enrich-tags
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  models: read
+
+jobs:
+  enrich-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch latest to avoid push conflicts with update-index
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enrich tags via GitHub Models
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/enrich-tags.mjs
