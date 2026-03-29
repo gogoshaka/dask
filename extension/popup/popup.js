@@ -76,34 +76,22 @@ async function getUsername() {
 // ---------------------------------------------------------------------------
 
 const EXTENSION_REDIRECT_URL = `https://${chrome.runtime.id}.chromiumapp.org/`;
+const GITHUB_APP_SLUG = 'distributed-ai-specific-knowledge';
 
-function generateCodeVerifier() {
+function generateRandomState() {
   const arr = new Uint8Array(32);
   crypto.getRandomValues(arr);
   return btoa(String.fromCharCode(...arr))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function generateCodeChallenge(verifier) {
-  const data = new TextEncoder().encode(verifier);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
+async function loginWithGitHub() {
+  const state = generateRandomState();
 
-const GITHUB_APP_SLUG = 'distributed-ai-specific-knowledge';
-
-async function loginWithPkce() {
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  const state = generateCodeVerifier();
-
-  // Combined install + authorize URL — user picks repos and authorizes in one step
-  const authUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?` +
-    `state=${state}` +
-    `&redirect_uri=${encodeURIComponent(EXTENSION_REDIRECT_URL)}` +
-    `&code_challenge=${codeChallenge}` +
-    `&code_challenge_method=S256`;
+  // Combined install + authorize — user picks repos and authorizes in one step
+  // The installation URL only supports `state`; after install GitHub redirects
+  // to the Callback URL configured in the app settings with `code` and `state`.
+  const authUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?state=${state}`;
 
   const redirectUrl = await chrome.identity.launchWebAuthFlow({
     url: authUrl,
@@ -122,8 +110,6 @@ async function loginWithPkce() {
       client_id: GITHUB_APP_CLIENT_ID,
       client_secret: GITHUB_APP_CLIENT_SECRET,
       code,
-      redirect_uri: EXTENSION_REDIRECT_URL,
-      code_verifier: codeVerifier,
     }),
   });
 
@@ -262,7 +248,7 @@ function showLoginPanel(settings) {
     btnConnect.textContent = 'Authorising…';
 
     try {
-      const token = await loginWithPkce();
+      const token = await loginWithGitHub();
       await chrome.storage.sync.set({ [STORAGE_KEY_TOKEN]: token });
       location.reload();
     } catch (err) {
