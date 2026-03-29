@@ -125,7 +125,7 @@ describe('startDeviceFlow', () => {
     assert.equal(capturedOpts.method, 'POST');
     const body = JSON.parse(capturedOpts.body);
     assert.equal(body.client_id, 'Iv1.client');
-    assert.equal(body.scope, 'public_repo');
+    assert.equal(body.scope, undefined);
     assert.deepEqual(result, mockBody);
   });
 

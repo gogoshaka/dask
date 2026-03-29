@@ -60,7 +60,6 @@ export async function startDeviceFlow(clientId) {
     },
     body: JSON.stringify({
       client_id: clientId,
-      scope: 'public_repo',
     }),
   });
 

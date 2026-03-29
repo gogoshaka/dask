@@ -98,7 +98,6 @@ async function loginWithPkce() {
   const authUrl = `https://github.com/login/oauth/authorize?` +
     `client_id=${GITHUB_APP_CLIENT_ID}` +
     `&redirect_uri=${encodeURIComponent(EXTENSION_REDIRECT_URL)}` +
-    `&scope=public_repo` +
     `&state=${state}` +
     `&code_challenge=${codeChallenge}` +
     `&code_challenge_method=S256`;
@@ -140,7 +139,7 @@ async function startDeviceFlow() {
   const res = await fetch('https://github.com/login/device/code', {
     method: 'POST',
     headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: GITHUB_APP_CLIENT_ID, scope: 'public_repo' }),
+    body: JSON.stringify({ client_id: GITHUB_APP_CLIENT_ID }),
   });
   if (!res.ok) throw new Error(`Device flow request failed: ${res.status}`);
   return res.json();
