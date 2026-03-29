@@ -76,7 +76,6 @@ async function getUsername() {
 // ---------------------------------------------------------------------------
 
 const EXTENSION_REDIRECT_URL = `https://${chrome.runtime.id}.chromiumapp.org/`;
-const GITHUB_APP_SLUG = 'distributed-ai-specific-knowledge';
 
 function generateRandomState() {
   const arr = new Uint8Array(32);
@@ -88,10 +87,11 @@ function generateRandomState() {
 async function loginWithGitHub() {
   const state = generateRandomState();
 
-  // Combined install + authorize — user picks repos and authorizes in one step
-  // The installation URL only supports `state`; after install GitHub redirects
-  // to the Callback URL configured in the app settings with `code` and `state`.
-  const authUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?state=${state}`;
+  // Standard OAuth authorize URL — GitHub redirects to the Callback URL with code + state
+  const authUrl = `https://github.com/login/oauth/authorize?` +
+    `client_id=${GITHUB_APP_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(EXTENSION_REDIRECT_URL)}` +
+    `&state=${state}`;
 
   const redirectUrl = await chrome.identity.launchWebAuthFlow({
     url: authUrl,
