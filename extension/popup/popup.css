@@ -150,15 +150,27 @@ label input[readonly] {
 }
 .link-btn:hover { text-decoration: underline; }
 
-.login-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
+.onboarding {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
 }
 
-.login-options .link-btn {
-  text-align: center;
+.onboarding-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.onboarding-steps {
+  padding-left: 20px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.onboarding-steps a {
+  font-weight: 500;
 }
 
 .full-width { width: 100%; }
