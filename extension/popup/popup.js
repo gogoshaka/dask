@@ -35,12 +35,8 @@ const fieldUrl     = $('#field-url');
 const fieldTitle   = $('#field-title');
 const fieldTopic   = $('#field-topic');
 const fieldSummary = $('#field-summary');
-const tagInput     = $('#tag-input');
-const tagsContainer= $('#tags-container');
 const btnSave      = $('#btn-save');
 const saveResult   = $('#save-result');
-const btnGenerate  = $('#btn-generate');
-const aiStatus     = $('#ai-status');
 const recentPanel   = $('#recent-panel');
 const recentList    = $('#recent-list');
 const tabBar        = $('#tab-bar');
@@ -106,45 +102,6 @@ async function githubPut(path, body, token) {
   }
   return res.json();
 }
-
-// ---------------------------------------------------------------------------
-// Tags UI
-// ---------------------------------------------------------------------------
-
-const tags = [];
-
-function renderTags() {
-  tagsContainer.querySelectorAll('.tag').forEach((el) => el.remove());
-  tags.forEach((t, i) => {
-    const span = document.createElement('span');
-    span.className = 'tag';
-    span.innerHTML = `${escapeHtml(t)} <span class="remove-tag" data-index="${i}">×</span>`;
-    tagsContainer.insertBefore(span, tagInput);
-  });
-}
-
-tagsContainer.addEventListener('click', (e) => {
-  if (e.target.classList.contains('remove-tag')) {
-    tags.splice(Number(e.target.dataset.index), 1);
-    renderTags();
-  }
-});
-
-tagInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    const val = tagInput.value.trim();
-    if (val && !tags.includes(val)) {
-      tags.push(val);
-      renderTags();
-    }
-    tagInput.value = '';
-  }
-  if (e.key === 'Backspace' && tagInput.value === '' && tags.length) {
-    tags.pop();
-    renderTags();
-  }
-});
 
 // ---------------------------------------------------------------------------
 // UI helpers
@@ -332,12 +289,6 @@ async function showSavePanel(token, settings) {
 
   // Load recent links in background (non-blocking)
   loadRecentLinks(token, settings.repo, topicIds);
-
-  // Enable generate button and auto-trigger if page excerpt is available
-  if (pageExcerpt) {
-    btnGenerate.disabled = false;
-    triggerGeneration(token);
-  }
 }
 
 async function loadTopics(token, repo) {
@@ -478,65 +429,21 @@ recentList.addEventListener('click', async (e) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// AI generation (tags + summary)
-// ---------------------------------------------------------------------------
+function prependRecentItem(item) {
+  // Remove "No links yet" placeholder
+  const placeholder = recentList.querySelector('.ai-status');
+  if (placeholder) placeholder.remove();
 
-async function triggerGeneration(token) {
-  if (!pageExcerpt) return;
-
-  const title = fieldTitle.value.trim();
-  const excerpt = [
-    pageExcerpt.description,
-    pageExcerpt.keywords,
-    (pageExcerpt.headings || []).join('. '),
-    pageExcerpt.bodyText,
-  ].filter(Boolean).join('\n').slice(0, 2000);
-
-  if (!excerpt) return;
-
-  // Show loading state
-  aiStatus.textContent = 'Generating…';
-  aiStatus.className = 'ai-status loading';
-  show(aiStatus);
-  btnGenerate.disabled = true;
-
-  try {
-    const { generateTagsAndSummary } = await import('../lib/tag-generator.js');
-    const result = await generateTagsAndSummary(title, excerpt, token);
-
-    if (result) {
-      // Populate tags (merge with any manually entered tags)
-      if (result.tags && result.tags.length > 0) {
-        const merged = [...new Set([...tags, ...result.tags])].slice(0, 15);
-        tags.length = 0;
-        merged.forEach((t) => tags.push(t));
-        renderTags();
-      }
-
-      // Populate summary (only if currently empty)
-      if (result.summary && !fieldSummary.value.trim()) {
-        fieldSummary.value = result.summary;
-      }
-
-      aiStatus.textContent = '✓ Ready to review';
-      aiStatus.className = 'ai-status';
-    } else {
-      aiStatus.textContent = 'Generation failed — add manually';
-      aiStatus.className = 'ai-status error';
-    }
-  } catch {
-    aiStatus.textContent = 'Generation failed — add manually';
-    aiStatus.className = 'ai-status error';
-  } finally {
-    btnGenerate.disabled = false;
-  }
+  const div = document.createElement('div');
+  div.className = 'recent-item';
+  div.innerHTML = `
+    <span class="recent-topic">${escapeHtml(item._topic)}</span>
+    <a href="${escapeHtml(item.url)}" target="_blank" title="${escapeHtml(item.title || item.url)}">${escapeHtml(item.title || item.url)}</a>
+    <span class="recent-date">${relativeTime(item.date_published)}</span>
+    <button class="recent-delete" data-topic="${escapeHtml(item._topic)}" data-url="${escapeHtml(item.url)}" title="Delete">×</button>
+  `;
+  recentList.prepend(div);
 }
-
-btnGenerate.addEventListener('click', async () => {
-  const token = await getToken();
-  if (token) triggerGeneration(token);
-});
 
 // ---------------------------------------------------------------------------
 // New topic
@@ -646,12 +553,35 @@ btnSave.addEventListener('click', async () => {
       return;
     }
 
+    // Auto-generate tags + summary from page content
+    let autoTags = [];
+    let autoSummary = summary;
+    if (pageExcerpt) {
+      const excerpt = [
+        pageExcerpt.description,
+        pageExcerpt.keywords,
+        (pageExcerpt.headings || []).join('. '),
+        pageExcerpt.bodyText,
+      ].filter(Boolean).join('\n').slice(0, 2000);
+
+      if (excerpt) {
+        try {
+          const { generateTagsAndSummary } = await import('../lib/tag-generator.js');
+          const result = await generateTagsAndSummary(title, excerpt, token);
+          if (result) {
+            autoTags = result.tags || [];
+            if (!autoSummary && result.summary) autoSummary = result.summary;
+          }
+        } catch { /* tag generation unavailable */ }
+      }
+    }
+
     const newSource = {
       id: url,
       url,
       title,
-      summary,
-      tags: [...tags],
+      summary: autoSummary,
+      tags: autoTags.slice(0, 15),
       date_published: new Date().toISOString(),
       authors: [{ name: username }],
       _source_author: '',
@@ -676,10 +606,11 @@ btnSave.addEventListener('click', async () => {
     saveResult.textContent = `✅ Saved to ${topic} (${existing.items.length} sources)`;
     show(saveResult);
 
+    // Immediately prepend to recent list
+    prependRecentItem({ ...newSource, _topic: topic });
+
     // Clear form fields for next save
     fieldSummary.value = '';
-    tags.length = 0;
-    renderTags();
   } catch (err) {
     showError(`Save failed: ${err.message}`);
   } finally {
