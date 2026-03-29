@@ -377,6 +377,32 @@ label input[readonly] {
   white-space: nowrap;
 }
 
+.recent-delete {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.recent-item:hover .recent-delete {
+  opacity: 1;
+}
+
+.recent-delete:hover {
+  color: #cf222e;
+}
+
+.recent-delete:disabled {
+  cursor: wait;
+  color: #8b949e;
+}
+
 /* ── Misc (other) ──────────────────────────────────────── */
 
 .divider {

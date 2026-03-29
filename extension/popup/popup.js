@@ -408,6 +408,7 @@ async function loadRecentLinks(token, repo, topicIds) {
         <span class="recent-topic">${escapeHtml(item._topic)}</span>
         <a href="${escapeHtml(item.url)}" target="_blank" title="${escapeHtml(item.title || item.url)}">${escapeHtml(item.title || item.url)}</a>
         <span class="recent-date">${relativeTime(item.date_published)}</span>
+        <button class="recent-delete" data-topic="${escapeHtml(item._topic)}" data-url="${escapeHtml(item.url)}" title="Delete">×</button>
       `;
       recentList.appendChild(div);
     });
@@ -415,6 +416,47 @@ async function loadRecentLinks(token, repo, topicIds) {
     recentList.innerHTML = '<span class="ai-status error">Could not load recent links</span>';
   }
 }
+
+recentList.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.recent-delete');
+  if (!btn) return;
+
+  const topic = btn.dataset.topic;
+  const url = btn.dataset.url;
+  if (!confirm(`Delete this link from ${topic}?`)) return;
+
+  const row = btn.closest('.recent-item');
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  try {
+    const token = await getToken();
+    const settings = await getSettings();
+    const [owner, name] = settings.repo.split('/');
+    const path = `/repos/${owner}/${name}/contents/topics/${topic}.json`;
+
+    const file = await githubGet(path, token);
+    const existing = JSON.parse(atob(file.content));
+
+    existing.items = (existing.items || []).filter((item) => item.url !== url);
+
+    const updatedContent = btoa(unescape(encodeURIComponent(JSON.stringify(existing, null, 2))));
+    await githubPut(path, {
+      message: `Remove source: ${url}`,
+      content: updatedContent,
+      sha: file.sha,
+    }, token);
+
+    row.remove();
+    if (!recentList.querySelector('.recent-item')) {
+      recentList.innerHTML = '<span class="ai-status">No links yet</span>';
+    }
+  } catch (err) {
+    btn.textContent = '×';
+    btn.disabled = false;
+    showError(`Delete failed: ${err.message}`);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // AI generation (tags + summary)
