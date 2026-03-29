@@ -1,7 +1,7 @@
 {
   "version": "https://jsonfeed.org/version/1.1",
   "title": "microsoft-sentinel-graph",
-  "description": "Microsoft Sentinel Graph ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ graph-based security analytics, incident graph, hunting graph, custom graphs",
+  "description": "Microsoft Sentinel Graph ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ graph-based security analytics, incident graph, hunting graph, custom graphs",
   "language": "en",
   "_tags": [
     "sentinel",
@@ -147,22 +147,6 @@
       "_source_author": "WindowsForum",
       "_source_date": "Sep 2025",
       "_priority": "P2"
-    },
-    {
-      "id": "https://techcommunity.microsoft.com/blog/microsoftsentinelblog/what%E2%80%99s-new-in-microsoft-sentinel-rsac-2026/4503971#community-4503971-graph-go",
-      "url": "https://techcommunity.microsoft.com/blog/microsoftsentinelblog/what%E2%80%99s-new-in-microsoft-sentinel-rsac-2026/4503971#community-4503971-graph-go",
-      "title": "WhatÃ¢ÂÂs new in Microsoft Sentinel: RSAC 2026 | Microsoft Community Hub",
-      "summary": "",
-      "tags": [],
-      "date_published": "2026-03-29T14:53:42.267Z",
-      "authors": [
-        {
-          "name": "gogoshaka"
-        }
-      ],
-      "_source_author": "",
-      "_source_date": "",
-      "_priority": "P0"
     }
   ]
 }
