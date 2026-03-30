@@ -147,23 +147,6 @@
       "_source_author": "WindowsForum",
       "_source_date": "Sep 2025",
       "_priority": "P2"
-    },
-    {
-      "id": "https://example.com/playwright-test",
-      "url": "https://example.com/playwright-test",
-      "title": "",
-      "summary": "",
-      "tags": [],
-      "date_published": "2026-03-30T06:31:05.824Z",
-      "authors": [
-        {
-          "name": "playwright-test"
-        }
-      ],
-      "_source_author": "",
-      "_source_date": "",
-      "_priority": "P0",
-      "_commit_sha": "d05896dc8d1db5d32535f39073e41036e1120df0"
     }
   ]
 }
