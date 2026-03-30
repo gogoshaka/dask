@@ -3,9 +3,9 @@
  *
  * Loads the extension in Chromium, injects a GitHub token into
  * chrome.storage.sync, and exercises the full popup UI:
- *   - Save panel renders with pre-filled URL & title
+ *   - Save panel renders with pre-filled URL
  *   - Topic dropdown loads from _index.json
- *   - Priority pills and tag chips work
+ *   - AI summary spinner appears
  *   - Save button pushes a source to the repo
  *   - Settings panel toggles
  *   - Logout returns to login panel
@@ -175,53 +175,63 @@ test.describe('Dask Extension', () => {
     await popup.close();
   });
 
-  test('priority pills toggle correctly', async () => {
+  test('AI summary spinner appears while generating', async () => {
+    // Navigate a tab to example.com so the extension has content to extract
+    const page = await context.newPage();
+    await page.goto('https://example.com');
+
     const popup = await context.newPage();
     await popup.goto(popupUrl());
     await popup.waitForSelector('#save-panel:not(.hidden)', { timeout: 10_000 });
 
-    // P0 should be checked by default
-    const p0 = popup.locator('input[name="priority"][value="P0"]');
-    await expect(p0).toBeChecked();
+    // The spinner element should exist in the DOM
+    const spinnerContainer = popup.locator('#ai-summary-loading');
+    await expect(spinnerContainer).toBeAttached();
 
-    // Radio inputs are display:none (pill CSS hides them), click the <span> label instead
-    await popup.locator('.pill:has(input[value="P1"]) span').click();
-    await expect(popup.locator('input[name="priority"][value="P1"]')).toBeChecked();
-    await expect(p0).not.toBeChecked();
+    // The .spinner element should exist inside it
+    const spinner = popup.locator('#ai-summary-loading .spinner');
+    await expect(spinner).toBeAttached();
 
-    // Click P2 span
-    await popup.locator('.pill:has(input[value="P2"]) span').click();
-    await expect(popup.locator('input[name="priority"][value="P2"]')).toBeChecked();
+    // Check spinner computed styles (even when hidden, we can verify CSS is correct)
+    const spinnerStyles = await spinner.evaluate((el) => {
+      // Temporarily remove hidden from parent to measure rendered styles
+      const parent = el.closest('.hidden');
+      const wasHidden = parent !== null;
+      if (wasHidden) parent.classList.remove('hidden');
+      const cs = getComputedStyle(el);
+      const result = {
+        display: cs.display,
+        width: parseFloat(cs.width),
+        height: parseFloat(cs.height),
+        borderTopColor: cs.borderTopColor,
+        animationName: cs.animationName,
+      };
+      if (wasHidden) parent.classList.add('hidden');
+      return result;
+    });
+
+    // Spinner renders with non-zero size and the spin animation
+    // (display is 'block' because flex parent blockifies inline-block children)
+    expect(spinnerStyles.width).toBeGreaterThan(0);
+    expect(spinnerStyles.height).toBeGreaterThan(0);
+    expect(spinnerStyles.animationName).toBe('spin');
+
+    // Eventually, either the summary section or the loading element should resolve
+    // (spinner hides when summary arrives or extraction fails)
+    await popup.waitForFunction(
+      () => {
+        const loading = document.querySelector('#ai-summary-loading');
+        const summary = document.querySelector('#ai-summary-section');
+        return (
+          loading.classList.contains('hidden') ||
+          (summary && !summary.classList.contains('hidden'))
+        );
+      },
+      { timeout: 30_000 }
+    );
 
     await popup.close();
-  });
-
-  test('tag chips can be added and removed', async () => {
-    const popup = await context.newPage();
-    await popup.goto(popupUrl());
-    await popup.waitForSelector('#save-panel:not(.hidden)', { timeout: 10_000 });
-
-    const tagInput = popup.locator('#tag-input');
-
-    // Add a tag
-    await tagInput.fill('sentinel');
-    await tagInput.press('Enter');
-
-    let tags = popup.locator('#tags-container .tag');
-    await expect(tags).toHaveCount(1);
-    await expect(tags.first()).toContainText('sentinel');
-
-    // Add another tag
-    await tagInput.fill('graph');
-    await tagInput.press('Enter');
-    await expect(tags).toHaveCount(2);
-
-    // Remove first tag by clicking ×
-    await popup.locator('#tags-container .remove-tag').first().click();
-    await expect(tags).toHaveCount(1);
-    await expect(tags.first()).toContainText('graph');
-
-    await popup.close();
+    await page.close();
   });
 
   test('settings panel toggles', async () => {
@@ -307,8 +317,6 @@ test.describe('Dask Extension', () => {
       document.querySelector('#field-url').removeAttribute('readonly');
     });
     await popup.locator('#field-url').fill('https://example.com/playwright-test');
-    await popup.locator('#field-title').fill('Playwright Test Source');
-    await popup.locator('#field-summary').fill('E2E test source created by Playwright');
 
     // Select the test topic we created (or first available topic)
     const topicSelect = popup.locator('#field-topic');
@@ -317,14 +325,6 @@ test.describe('Dask Extension', () => {
       ? TEST_TOPIC
       : 'microsoft-sentinel-graph';
     await topicSelect.selectOption(targetTopic);
-
-    // Set priority to P2 (test data) — click span since input is display:none
-    await popup.locator('.pill:has(input[value="P2"]) span').click();
-
-    // Add a tag
-    const tagInput = popup.locator('#tag-input');
-    await tagInput.fill('e2e-test');
-    await tagInput.press('Enter');
 
     // Click Save
     await popup.locator('#btn-save').click();
@@ -353,8 +353,7 @@ test.describe('Dask Extension', () => {
       (s) => s.url === 'https://example.com/playwright-test'
     );
     expect(savedSource).toBeDefined();
-    expect(savedSource.title).toBe('Playwright Test Source');
-    expect(savedSource._priority).toBe('P2');
+    expect(savedSource._priority).toBe('P0');
 
     // Clean up: remove the test source from the topic file if it's not the test topic
     if (targetTopic !== TEST_TOPIC) {
