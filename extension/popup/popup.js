@@ -37,6 +37,12 @@ const recentPanel   = $('#recent-panel');
 const recentList    = $('#recent-list');
 const tabBar        = $('#tab-bar');
 
+// AI summary
+const aiSummarySection = $('#ai-summary-section');
+const aiSummaryText    = $('#ai-summary-text');
+const aiKeyPoints      = $('#ai-key-points');
+const aiSummaryLoading = $('#ai-summary-loading');
+
 // New topic
 const btnNewTopic    = $('#btn-new-topic');
 const newTopicForm   = $('#new-topic-form');
@@ -294,6 +300,50 @@ $('#btn-logout').addEventListener('click', async () => {
 
 // Cached page excerpt extracted via chrome.scripting.executeScript
 let pageExcerpt = null;
+// Cached AI result for use in save handler
+let cachedAIResult = null;
+
+async function generateAISummary(token) {
+  show(aiSummaryLoading);
+  hide(aiSummarySection);
+
+  const excerpt = [
+    pageExcerpt.description,
+    pageExcerpt.keywords,
+    (pageExcerpt.headings || []).join('. '),
+    pageExcerpt.bodyText,
+  ].filter(Boolean).join('\n').slice(0, 2000);
+
+  if (!excerpt) { hide(aiSummaryLoading); return; }
+
+  try {
+    const { generateTagsAndSummary } = await import('../lib/tag-generator.js');
+    const result = await generateTagsAndSummary(fieldTitle.value, excerpt, token);
+    if (result) {
+      cachedAIResult = result;
+
+      aiSummaryText.textContent = result.summary;
+      aiKeyPoints.innerHTML = '';
+      (result.key_points || []).forEach((point) => {
+        const li = document.createElement('li');
+        li.textContent = point;
+        aiKeyPoints.appendChild(li);
+      });
+
+      hide(aiSummaryLoading);
+      show(aiSummarySection);
+
+      // Auto-fill summary field if empty
+      if (!fieldSummary.value && result.summary) {
+        fieldSummary.value = result.summary;
+      }
+    } else {
+      hide(aiSummaryLoading);
+    }
+  } catch {
+    hide(aiSummaryLoading);
+  }
+}
 
 async function showSavePanel(token, settings) {
   show(headerActions);
@@ -324,6 +374,11 @@ async function showSavePanel(token, settings) {
       }
     }
   } catch { /* activeTab might not be available yet */ }
+
+  // Auto-generate AI summary (non-blocking)
+  if (pageExcerpt) {
+    generateAISummary(token);
+  }
 
   // Ensure we have a cached username
   const cachedUser = await chrome.storage.sync.get(STORAGE_KEY_USERNAME);
@@ -677,10 +732,13 @@ btnSave.addEventListener('click', async () => {
       return;
     }
 
-    // Auto-generate tags + summary from page content
+    // Use cached AI result (already generated on popup open) or generate now
     let autoTags = [];
     let autoSummary = summary;
-    if (pageExcerpt) {
+    if (cachedAIResult) {
+      autoTags = cachedAIResult.tags || [];
+      if (!autoSummary && cachedAIResult.summary) autoSummary = cachedAIResult.summary;
+    } else if (pageExcerpt) {
       const excerpt = [
         pageExcerpt.description,
         pageExcerpt.keywords,

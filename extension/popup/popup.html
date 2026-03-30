@@ -70,6 +70,14 @@
       <input id="field-title" type="text">
     </label>
 
+    <!-- AI-generated summary (auto-loaded on popup open) -->
+    <div id="ai-summary-section" class="ai-summary hidden">
+      <div class="ai-summary-header">✨ AI Summary</div>
+      <p id="ai-summary-text" class="ai-summary-text"></p>
+      <ul id="ai-key-points" class="ai-key-points"></ul>
+    </div>
+    <div id="ai-summary-loading" class="ai-status loading hidden">Analyzing page…</div>
+
     <label>
       Topic
       <select id="field-topic">

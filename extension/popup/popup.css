@@ -228,6 +228,42 @@ label input[readonly] {
 
 /* ── Tags ───────────────────────────────────────────────── */
 
+/* ── AI summary section ────────────────────────────────── */
+
+.ai-summary {
+  background: #f0f4ff;
+  border: 1px solid #c8d1e0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+
+.ai-summary-header {
+  font-weight: 600;
+  font-size: 12px;
+  color: #6f42c1;
+  margin-bottom: 6px;
+}
+
+.ai-summary-text {
+  font-size: 12px;
+  color: #1f2328;
+  margin: 0 0 6px 0;
+  line-height: 1.5;
+}
+
+.ai-key-points {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: #1f2328;
+  line-height: 1.6;
+}
+
+.ai-key-points li {
+  margin-bottom: 2px;
+}
+
 /* ── AI status (used in recent list loading) ───────────── */
 
 .ai-status {
