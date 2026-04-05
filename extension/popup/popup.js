@@ -476,18 +476,26 @@ async function showSavePanel(token, settings) {
 
           // For YouTube, extract just the description as fallback excerpt
           if (!pageTranscript) {
+            console.log('[Dask] No transcript, trying YouTube description fallback…');
             try {
               const descResults = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: () => {
-                  const desc = document.querySelector('#description-inner, ytd-text-inline-expander, meta[name="description"]');
-                  return desc?.content || desc?.innerText || null;
+                  // Try meta description first, then structured description element
+                  const meta = document.querySelector('meta[name="description"]');
+                  if (meta?.content) return meta.content;
+                  const desc = document.querySelector('#description-inner, ytd-text-inline-expander, #description');
+                  if (desc?.innerText) return desc.innerText;
+                  // Last resort: video title
+                  const title = document.querySelector('h1.ytd-watch-metadata yt-formatted-string, h1.title');
+                  return title?.textContent || null;
                 },
               });
+              console.log('[Dask] Description fallback:', descResults?.[0]?.result?.slice(0, 200));
               if (descResults?.[0]?.result) {
-                pageExcerpt = { description: descResults[0].result, bodyText: '' };
+                pageExcerpt = { description: descResults[0].result, bodyText: '', headings: [], keywords: '' };
               }
-            } catch { /* ok */ }
+            } catch (err) { console.warn('[Dask] Description fallback failed:', err); }
           }
         } else {
           // Non-YouTube: extract page content normally
