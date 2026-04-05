@@ -72,7 +72,7 @@ export async function generateTagsAndSummary(title, excerpt, token) {
           { role: 'user', content: userMessage },
         ],
         temperature: 1,
-        max_completion_tokens: 400,
+        max_completion_tokens: 1024,
       }),
     });
 
