@@ -443,45 +443,65 @@ async function showSavePanel(token, settings) {
             const captionData = captionResults?.[0]?.result;
             console.log('[Dask] Caption data:', captionData);
 
-            if (captionData?.url) {
-              // Fetch caption XML from the YouTube tab's context (needs YT cookies)
-              const lang = captionData.lang || 'en';
+            if (captionData?.url || captionData?.lang) {
+              // Use YouTube's internal get_transcript API (more reliable than timedtext)
               const videoId = new URL(tab.url).searchParams.get('v');
-              const urls = [
-                captionData.url,
-                videoId ? `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}&fmt=srv3` : null,
-              ].filter(Boolean);
+              console.log('[Dask] Attempting transcript via youtubei API for video:', videoId);
+              try {
+                const tResults = await chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  world: 'MAIN',
+                  func: async (vid) => {
+                    try {
+                      // Get YouTube's internal API key and client info
+                      const cfg = window.ytcfg?.data_ || window.yt?.config_ || {};
+                      const apiKey = cfg.INNERTUBE_API_KEY || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+                      const clientName = cfg.INNERTUBE_CLIENT_NAME || 'WEB';
+                      const clientVersion = cfg.INNERTUBE_CLIENT_VERSION || '2.20240101';
 
-              for (const captionUrl of urls) {
-                console.log('[Dask] Trying caption URL:', captionUrl.slice(0, 100));
-                try {
-                  const tResults = await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    func: (url) => {
-                      return fetch(url)
-                        .then((r) => r.ok ? r.text() : '')
-                        .catch(() => '');
-                    },
-                    args: [captionUrl],
-                  });
-                  const xml = tResults?.[0]?.result;
-                  if (!xml || xml.length < 20) { console.log('[Dask] Empty caption response, trying next…'); continue; }
-                  console.log('[Dask] Caption response:', xml.length, 'chars');
-                  const doc = new DOMParser().parseFromString(xml, 'application/xml');
-                  const nodes = doc.querySelectorAll('text');
-                  console.log('[Dask] Caption XML text nodes:', nodes.length);
-                  if (nodes.length) {
-                    pageTranscript = Array.from(nodes).map((n) => {
-                      const el = document.createElement('span');
-                      el.innerHTML = n.textContent;
-                      return el.textContent.trim();
-                    }).filter(Boolean).join(' ');
-                    console.log('[Dask] Transcript:', pageTranscript.length, 'chars');
-                    aiSummaryLoading.innerHTML = '<span class="spinner"></span> 📺 Summarizing video transcript…';
-                    break;
-                  }
-                } catch (err) { console.warn('[Dask] Caption fetch error:', err); }
-              }
+                      const res = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          context: {
+                            client: { clientName, clientVersion },
+                          },
+                          params: btoa(`\n\x0b${vid}`),
+                        }),
+                      });
+                      if (!res.ok) return { error: `HTTP ${res.status}` };
+                      const data = await res.json();
+                      // Extract transcript segments
+                      const body = data?.actions?.[0]?.updateEngagementPanelAction
+                        ?.content?.transcriptRenderer?.content
+                        ?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer
+                        ?.initialSegments;
+                      if (!body?.length) {
+                        // Try alternative path
+                        const body2 = data?.actions?.[0]?.updateEngagementPanelAction
+                          ?.content?.transcriptRenderer?.body
+                          ?.transcriptBodyRenderer?.transcriptSegmentListRenderer
+                          ?.initialSegments;
+                        if (!body2?.length) return { error: 'No segments', keys: Object.keys(data || {}).join(',') };
+                        return { segments: body2 };
+                      }
+                      return { segments: body };
+                    } catch (e) { return { error: e.message }; }
+                  },
+                  args: [videoId],
+                });
+                const transcriptData = tResults?.[0]?.result;
+                console.log('[Dask] Transcript API result:', transcriptData?.error || `${transcriptData?.segments?.length} segments`);
+
+                if (transcriptData?.segments?.length) {
+                  pageTranscript = transcriptData.segments
+                    .map((s) => s?.transcriptSegmentRenderer?.snippet?.runs?.map((r) => r.text).join(''))
+                    .filter(Boolean)
+                    .join(' ');
+                  console.log('[Dask] Transcript:', pageTranscript.length, 'chars');
+                  aiSummaryLoading.innerHTML = '<span class="spinner"></span> 📺 Summarizing video transcript…';
+                }
+              } catch (err) { console.warn('[Dask] Transcript API failed:', err); }
             }
           } catch (err) { console.warn('[Dask] Transcript extraction failed:', err); }
 
