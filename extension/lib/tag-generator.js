@@ -88,6 +88,7 @@ export async function generateTagsAndSummary(title, excerpt, token) {
     }
 
     const data = await res.json();
+    console.log('[Dask] AI raw response:', JSON.stringify(data).slice(0, 500));
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error(`Empty response: ${JSON.stringify(data).slice(0, 300)}`);
 

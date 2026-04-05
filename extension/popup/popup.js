@@ -424,18 +424,19 @@ async function showSavePanel(token, settings) {
         // Extract transcript from YouTube videos
         const { isYouTubeVideo } = await import('../lib/youtube-utils.js');
         if (isYouTubeVideo(tab.url)) {
+          console.log('[Dask] YouTube video detected, extracting transcript…');
           try {
             const tResults = await chrome.scripting.executeScript({
               target: { tabId: tab.id },
               files: ['lib/youtube-transcript.js'],
             });
+            console.log('[Dask] Transcript script result:', tResults?.[0]?.result ? `${tResults[0].result.length} chars` : 'null/empty');
             if (tResults && tResults[0] && tResults[0].result) {
               pageTranscript = tResults[0].result;
-              console.log('[Dask] YouTube transcript extracted:', pageTranscript.length, 'chars');
               console.log('[Dask] Transcript preview:', pageTranscript.slice(0, 500));
               aiSummaryLoading.innerHTML = '<span class="spinner"></span> 📺 Summarizing video transcript…';
             }
-          } catch { /* transcript extraction failed — continue without it */ }
+          } catch (err) { console.warn('[Dask] Transcript extraction failed:', err); }
         }
       }
     }
