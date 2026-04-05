@@ -411,45 +411,40 @@ async function showSavePanel(token, settings) {
 
       // Extract page content for tag generation (activeTab + scripting)
       if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
-        try {
-          const results = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ['lib/content-extractor.js'],
-          });
-          if (results && results[0] && results[0].result) {
-            pageExcerpt = results[0].result;
-          }
-        } catch { /* some pages block injection — that's fine */ }
-
-        // Extract transcript from YouTube videos
         const { isYouTubeVideo } = await import('../lib/youtube-utils.js');
-        if (isYouTubeVideo(tab.url)) {
+        const isYT = isYouTubeVideo(tab.url);
+
+        // For YouTube, try transcript first; for other pages, extract content
+        if (isYT) {
           console.log('[Dask] YouTube video detected, extracting transcript…');
           try {
-            // Step 1: Get caption track URL from the MAIN world (where YT stores player data)
+            // Read player response from MAIN world (page's JS context)
             const captionResults = await chrome.scripting.executeScript({
               target: { tabId: tab.id },
               world: 'MAIN',
               func: () => {
                 try {
-                  const pr = window.ytInitialPlayerResponse ||
-                    document.querySelector('#movie_player')?.getPlayerResponse?.();
+                  // Try multiple sources — YT updates these on SPA navigations
+                  const pr = window.ytInitialPlayerResponse
+                    || document.querySelector('#movie_player')?.getPlayerResponse?.()
+                    || window.ytplayer?.config?.args?.raw_player_response;
+                  if (!pr) return { error: 'No player response found' };
                   const tracks = pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-                  if (!tracks?.length) return null;
+                  if (!tracks?.length) return { error: 'No caption tracks', hasCaptions: !!pr?.captions };
                   const track =
                     tracks.find((t) => t.languageCode === 'en' && t.kind !== 'asr') ||
                     tracks.find((t) => t.languageCode === 'en') ||
                     tracks.find((t) => t.kind !== 'asr') ||
                     tracks[0];
-                  return track?.baseUrl || null;
-                } catch { return null; }
+                  return { url: track?.baseUrl || null, lang: track?.languageCode };
+                } catch (e) { return { error: e.message }; }
               },
             });
-            const captionUrl = captionResults?.[0]?.result;
-            console.log('[Dask] Caption URL:', captionUrl ? captionUrl.slice(0, 80) + '…' : 'null');
+            const captionData = captionResults?.[0]?.result;
+            console.log('[Dask] Caption data:', captionData);
 
-            if (captionUrl) {
-              // Step 2: Fetch and parse the caption XML (can run in ISOLATED world)
+            if (captionData?.url) {
+              // Fetch and parse the caption XML
               const tResults = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: async (url) => {
@@ -467,17 +462,44 @@ async function showSavePanel(token, settings) {
                     }).filter(Boolean).join(' ');
                   } catch { return null; }
                 },
-                args: [captionUrl],
+                args: [captionData.url],
               });
               const transcript = tResults?.[0]?.result;
               console.log('[Dask] Transcript result:', transcript ? `${transcript.length} chars` : 'null');
               if (transcript) {
                 pageTranscript = transcript;
-                console.log('[Dask] Transcript preview:', pageTranscript.slice(0, 500));
+                console.log('[Dask] Transcript preview:', pageTranscript.slice(0, 300));
                 aiSummaryLoading.innerHTML = '<span class="spinner"></span> 📺 Summarizing video transcript…';
               }
             }
           } catch (err) { console.warn('[Dask] Transcript extraction failed:', err); }
+
+          // For YouTube, extract just the description as fallback excerpt
+          if (!pageTranscript) {
+            try {
+              const descResults = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                  const desc = document.querySelector('#description-inner, ytd-text-inline-expander, meta[name="description"]');
+                  return desc?.content || desc?.innerText || null;
+                },
+              });
+              if (descResults?.[0]?.result) {
+                pageExcerpt = { description: descResults[0].result, bodyText: '' };
+              }
+            } catch { /* ok */ }
+          }
+        } else {
+          // Non-YouTube: extract page content normally
+          try {
+            const results = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ['lib/content-extractor.js'],
+            });
+            if (results && results[0] && results[0].result) {
+              pageExcerpt = results[0].result;
+            }
+          } catch { /* some pages block injection — that's fine */ }
         }
       }
     }
