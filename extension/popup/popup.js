@@ -273,7 +273,7 @@ $('#btn-settings').addEventListener('click', async () => {
 });
 
 $('#btn-save-settings').addEventListener('click', async () => {
-  await saveSettingsToStorage(settingRepo.value.trim());
+  await saveSettingsToStorage(settingRepo.value.trim(), settingModelsToken.value.trim());
   hide(settingsPanel);
   show(savePanel);
 });
