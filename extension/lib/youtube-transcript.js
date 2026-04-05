@@ -3,10 +3,35 @@
 // Returns the transcript as a plain text string, or null if unavailable.
 
 (async function extractYouTubeTranscript() {
-  // Parse ytInitialPlayerResponse from page script tags.
-  // Content scripts run in an isolated world and cannot access page JS variables,
-  // so we extract the JSON directly from the raw script tag text.
-  function findPlayerResponse() {
+  // Try to read the player response from the page's JS variable via a page-level script.
+  // This works for SPA navigations where the <script> tag has stale data.
+  function getPlayerResponseFromPageWorld() {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      const id = '__dask_yt_' + Date.now();
+      script.textContent = `
+        document.dispatchEvent(new CustomEvent('${id}', {
+          detail: JSON.stringify(
+            window.ytInitialPlayerResponse ||
+            (document.querySelector('#movie_player')?.getPlayerResponse?.()) ||
+            null
+          )
+        }));
+      `;
+      const handler = (e) => {
+        document.removeEventListener(id, handler);
+        try { resolve(JSON.parse(e.detail)); } catch { resolve(null); }
+      };
+      document.addEventListener(id, handler);
+      document.documentElement.appendChild(script);
+      script.remove();
+      // Timeout fallback
+      setTimeout(() => { document.removeEventListener(id, handler); resolve(null); }, 500);
+    });
+  }
+
+  // Fallback: parse ytInitialPlayerResponse from raw <script> tag text.
+  function findPlayerResponseFromScriptTags() {
     for (const script of document.querySelectorAll('script')) {
       const text = script.textContent;
       if (!text || !text.includes('ytInitialPlayerResponse')) continue;
@@ -18,7 +43,6 @@
       const braceStart = text.indexOf('{', idx + marker.length);
       if (braceStart === -1) continue;
 
-      // Walk braces to find the matching close, respecting JSON string literals
       let depth = 0;
       let inString = false;
       let escaped = false;
@@ -48,7 +72,8 @@
     return null;
   }
 
-  const playerResponse = findPlayerResponse();
+  // Try page world first (works for SPA navigations), then fall back to script tags
+  const playerResponse = await getPlayerResponseFromPageWorld() || findPlayerResponseFromScriptTags();
   if (!playerResponse) return null;
 
   const captionTracks =
@@ -80,7 +105,6 @@
 
   const transcript = Array.from(textNodes)
     .map((node) => {
-      // Decode HTML entities that YouTube double-encodes in caption XML
       const el = document.createElement('span');
       el.innerHTML = node.textContent;
       return el.textContent.trim();
